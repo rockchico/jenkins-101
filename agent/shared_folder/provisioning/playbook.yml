@@ -1,0 +1,140 @@
+---
+  - hosts: all
+    become: true
+
+    vars:
+      pip_install_packages:
+        - name: docker
+      username: "vagrant" 
+      ssh_git_key: "/home/{{ username }}/.ssh/id_ssh_rsa_tfs" 
+      arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+      node_version: 18.15.0
+      
+
+    # roles:
+      #- role: 
+
+    tasks:
+
+      - name: Set timezone to America/Sao_Paulo
+        tags:
+          - basico
+        community.general.timezone:
+          name: America/Sao_Paulo
+        
+
+
+      - name: Run the equivalent of "apt-get update" as a separate step
+        tags:
+          - basico
+        ansible.builtin.apt:
+          update_cache: yes
+        
+
+      - name: Instala pacotes uteis
+        tags:
+          - basico
+        apt: name={{item}} state=latest
+        with_items:
+          - iputils-ping
+          - ncat
+          - wget
+          - vim
+          - httpie
+        
+
+        
+      - name: "Instala pip"
+        tags:
+          - basico
+        include_role: 
+          name: geerlingguy.pip
+
+      - name: "Setup zsh"
+        tags:
+          - basico
+        block:
+        - name: "Instala zsh"
+          tags:
+            - basico
+          #ignore_errors: true
+          include_role: 
+            name: gantsign.oh-my-zsh
+          vars:
+            users:
+            - username: "{{ username }}"
+              oh_my_zsh:
+                theme: amuse
+                plugins:
+                  - git
+                  - zsh-autosuggestions
+                  - zsh-syntax-highlighting
+                update_mode: reminder
+                update_frequency: 3
+                write_zshrc: true
+
+        - name: Clone plugin zsh-autosuggestions
+          ansible.builtin.git:
+            repo: 'https://github.com/zsh-users/zsh-autosuggestions.git'
+            dest: '/home/{{ username }}/.oh-my-zsh/custom/plugins/zsh-autosuggestions'
+            clone: yes
+            update: yes
+
+        - name: Clone plugin zsh-syntax-highlighting
+          ansible.builtin.git:
+            repo: 'https://github.com/zsh-users/zsh-syntax-highlighting.git'
+            dest: '/home/{{ username }}/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting'
+            clone: yes
+            update: yes
+        
+      - name: "Setup docker"
+        tags:
+          - dev
+          - docker
+        block:
+        - name: Add an Apt signing key, uses whichever key is at the URL
+          ansible.builtin.apt_key:
+            url: https://download.docker.com/linux/ubuntu/gpg
+            state: present
+
+        - name: somerepo | apt source
+          ansible.builtin.apt_repository:
+            repo: "deb [arch={{ arch }}] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+            state: present
+        
+        - name: "Instala docker"
+          include_role: 
+            name: geerlingguy.docker
+          vars:
+            docker_users:
+              - "{{ username }}"
+            docker_apt_release_channel: stable
+            docker_apt_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+            docker_apt_repository: "deb [arch={{ docker_apt_arch }}] {{ docker_repo_url }}/{{ ansible_distribution | lower }} {{ ansible_distribution_release }} {{ docker_apt_release_channel }}"
+            docker_apt_ignore_key_error: True
+            docker_apt_gpg_key: "{{ docker_repo_url }}/{{ ansible_distribution | lower }}/gpg"
+            docker_apt_filename: ""
+            docker_install_compose: false
+            docker_compose_version: "1.26.0"
+            docker_compose_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+            docker_compose_path: /usr/local/bin/docker-compose
+        
+        
+        - name: Configura socket docker
+          ansible.builtin.lineinfile:
+            path: /lib/systemd/system/docker.service
+            regexp: '^ExecStart='
+            line: ExecStart=/usr/bin/dockerd -H unix:// --containerd=/run/containerd/containerd.sock
+
+        - name: Restart service cron on centos, in all cases, also issue daemon-reload to pick up config changes
+          ansible.builtin.systemd:
+            state: restarted
+            daemon_reload: true
+            name: docker
+      
+
+      
+            
+
+
+        

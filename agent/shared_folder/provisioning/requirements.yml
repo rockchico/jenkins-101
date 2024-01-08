@@ -1,0 +1,10 @@
+# from galaxy
+
+roles:
+  - name: geerlingguy.pip
+    version: master
+  - name: geerlingguy.docker
+  - name: gantsign.oh-my-zsh
+
+collections:
+  - name: community.general
