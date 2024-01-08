@@ -2,8 +2,13 @@ pipeline {
     agent { 
         node {
             label 'docker-build-agent'
-            }
-      }
+        }
+    }
+
+    triggers {
+        pollSCM 'H/1 * * * *'
+    }
+
     stages {
         stage('Build') {
             steps {
